@@ -1,42 +1,99 @@
-import React, { Component } from 'react';
-import { PropTypes } from 'prop-types';
-import { Animated, ViewPropTypes } from 'react-native';
-import CircularProgress from './CircularProgress';
+import React from 'react'
+import {PropTypes} from 'prop-types'
+import {Animated, ViewPropTypes, Easing} from 'react-native'
+import CircularProgress from './CircularProgress'
 
-const AnimatedProgress = Animated.createAnimatedComponent(CircularProgress);
+const AnimatedProgress = Animated.createAnimatedComponent(CircularProgress)
 
-export default class AnimatedCircularProgress extends Component {
-  constructor(props) {
-    super(props);
+export default class AnimatedCircularProgress extends React.PureComponent {
+  constructor (props) {
+    super(props)
     this.state = {
-      chartFillAnimation: new Animated.Value(props.prefill || 0),
-    };
+      fillAnimation: 0,
+      fillAtChoose: 0,
+      counter: 0
+    }
+    this.interval = null
   }
 
-  componentDidMount() {
-    this.animateFill();
+  componentDidMount () {
+    this.animate(this.props.duration)
   }
 
-  componentDidUpdate(prevProps) {
+  componentDidUpdate (prevProps, prevState) {
     if (prevProps.fill !== this.props.fill) {
-      this.animateFill();
+      this.animate()
+    }
+
+    if (prevProps.isChoose !== this.props.isChoose && this.props.isChoose) {
+      this.setState({
+        fillAtChoose: this.state.fillAnimation
+      })
+    }
+    if (prevProps.isChoose !== this.props.isChoose && !this.props.isChoose) {
+      this.setState({
+        fillAnimation: 0
+      })
     }
   }
 
-  animateFill() {
-    const { tension, friction } = this.props;
-
-    Animated.spring(this.state.chartFillAnimation, {
-      toValue: this.props.fill,
-      tension,
-      friction,
-    }).start();
+  componentWillUnmount () {
+    clearInterval(this.interval)
   }
 
-  render() {
-    const { fill, prefill, ...other } = this.props;
+  async inAnimate () {
+   await clearInterval(this.interval)
+    this.interval = setInterval(async () => {
+      if (this.state.fillAtChoose < 0) {
+       await clearInterval(this.interval)
+        this.setState({
+          fillAtChoose: 0
+        }, async () => {
+          let onPress = this.props.callback
+          await typeof onPress === 'function' && onPress()
+          this.animate(50)
+        })
+      }
+      this.setState((prevState) => ({
+          fillAtChoose: prevState.fillAtChoose - 1
+        }
+      ))
+    }, 10)
+  }
 
-    return <AnimatedProgress {...other} fill={this.state.chartFillAnimation} />;
+  async deAnimate () {
+    await clearInterval(this.interval)
+    this.setState({
+      counter: 0,
+      fillAnimation: 100
+    }, () => {
+      this.interval = setInterval(async () => {
+        if (this.state.fillAnimation < 0) {
+         await clearInterval(this.interval)
+          this.setState({
+            fillAnimation: 0
+          })
+        }
+        this.setState((prevState) => ({fillAnimation: prevState.fillAnimation - 0.5}))
+      }, 35)
+    })
+  }
+
+  async animate (dur) {
+    await clearInterval(this.interval)
+    this.setState({fillAnimation: 0}, () => {
+      this.interval = setInterval(async () => {
+        if (this.state.fillAnimation >= 100) {
+          await clearInterval(this.interval)
+        }
+        this.setState((prevState) => ({fillAnimation: prevState.fillAnimation + 1}))
+      }, dur)
+    })
+  }
+
+  render () {
+    const {fill, prefill, ...other} = this.props
+    return <AnimatedProgress {...other} fillAtChoose={this.state.fillAtChoose} fill={this.state.fillAnimation}/>
   }
 }
 
@@ -49,11 +106,12 @@ AnimatedCircularProgress.propTypes = {
   beginColor: PropTypes.string,
   endColor: PropTypes.string,
   backgroundColor: PropTypes.string,
-  tension: PropTypes.number,
-  friction: PropTypes.number,
+  duration: PropTypes.number,
+  easing: PropTypes.func
 };
 
 AnimatedCircularProgress.defaultProps = {
-  tension: 7,
-  friction: 10,
+  duration: 500,
+  easing: Easing.out(Easing.linear),
+  prefill: 0
 };
